@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+
+import os
+import numpy as np
+import rospy
+import ros_numpy
+import message_filters
+from argparse import ArgumentParser
+import sys
+from sensor_msgs.msg import CompressedImage, Image, PointCloud2
+from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose
+from scipy.spatial.transform import Rotation as R
+from cv_bridge import CvBridge
+import cv2
+bridge = CvBridge()
+from ambf_client import Client
+import time
+from ambf_msgs.msg import ObjectState, RigidBodyCmd, CameraCmd
+
+sys.path.insert(0, '/home/shc/Twin-S/util')
+
+
+
+def callback(pss_limage, segm):
+    '''
+    Args:
+    - camhand_pose : pose msg of camera hand in tracker coordinate
+    - drill_pose : pose msg of drill in tracker coordinate
+    '''
+    global pub_eval_segm
+    pss_limage.header.stamp = rospy.Time.now()
+    segmimg_arr = np.fromstring(segm.data, np.uint8)
+    segm_image = cv2.imdecode(segmimg_arr, cv2.IMREAD_COLOR)
+
+    # Principle point after rectification: 511, 936
+    shift_coordinate = [np.rint((540-511)/3).astype(int), np.rint((960-936)/3).astype(int)] #shift on hight and width
+    rec_segm_image = cv2.copyMakeBorder(segm_image, 0, shift_coordinate[0], 0, shift_coordinate[1], cv2.BORDER_CONSTANT)
+    rec_segm_image = rec_segm_image[shift_coordinate[0]:,shift_coordinate[1]:]
+
+    limg_arr = np.fromstring(pss_limage.data, np.uint8)
+    limg_image = cv2.imdecode(limg_arr, cv2.IMREAD_COLOR)
+
+    # shift_coordinate = [np.rint((540-511)).astype(int), np.rint((960-936)).astype(int)] #shift on hight and width
+    # rec_l_image = cv2.copyMakeBorder(limg_image, shift_coordinate[0], 0, shift_coordinate[1], 0, cv2.BORDER_CONSTANT)
+    # rec_l_image = rec_l_image[:1080,:1920]
+
+    l_image = cv2.resize(limg_image, (640, 360))
+
+    overlap = cv2.addWeighted(l_image, 0.5, rec_segm_image, 0.5, 0)
+    # overlap = rec_segm_image
+    #### Create eval CompressedImage topic ####
+    msg = CompressedImage()
+    msg.header.stamp = rospy.Time.now()
+    msg.format = "jpeg"
+    msg.data = np.array(cv2.imencode('.jpg', overlap)[1]).tostring()
+    # Publish new image
+    pub_eval_segm.publish(msg)
+    print('Eval images published!')
+
+
+def my_shutdown_hook():
+    print("in my_shutdown_hook")
+
+
+def main():
+    global pub_eval_segm
+
+    # Initialize ROS node
+    rospy.init_node('image_extract_node', anonymous=True)
+
+    # Subscribers
+    pss_limage_sub = message_filters.Subscriber('pss_limage/compressed', CompressedImage)
+    segm_sub = message_filters.Subscriber('/ambf/env/cameras/main_camera/ImageData/compressed', CompressedImage)
+
+    pub_eval_segm = rospy.Publisher('/eval_segm/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
+    ts = message_filters.ApproximateTimeSynchronizer([pss_limage_sub, segm_sub], 50, 0.5)
+    ts.registerCallback(callback)
+
+    rospy.spin()
+
+    rospy.on_shutdown(my_shutdown_hook)
+
+
+if __name__ == '__main__':
+    
+    main()

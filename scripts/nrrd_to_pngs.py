@@ -44,7 +44,10 @@ import nrrd
 import PIL.Image
 import numpy as np
 from argparse import ArgumentParser
-
+from natsort import natsorted
+import sys
+import os
+import cv2
 
 def save_image(array, im_name):
 	im = PIL.Image.fromarray(array.astype(np.uint8))
@@ -69,6 +72,35 @@ def save_volume_as_images(data, im_prefix):
 		save_image(data[:, :, i], im_name)
 
 
+def deleteBackground(file_dir):
+	files = natsorted(os.listdir(file_dir))
+	# Read the image
+	for file in files:
+		src = cv2.imread(os.path.join(file_dir, file), 1)
+	# Convert image to image gray
+		tmp = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+	# Applying thresholding technique
+		_, alpha = cv2.threshold(tmp, 0, 255, cv2.THRESH_BINARY)
+
+	# Using cv2.split() to split channels 
+		# of coloured image
+		b, g, r = cv2.split(src)
+
+		# Channels and alpha
+		# b = b+18
+		# g = g+153
+		# r = r+255
+		b = b+211
+		g = g+211
+		r = r+211
+		rgba = [b, g, r, alpha]
+		
+		# Using cv2.merge() to merge rgba
+		# into a coloured/multi-channeled image
+		dst = cv2.merge(rgba, 4)
+		# Writing and saving to a new image
+		cv2.imwrite(os.path.join(file_dir, file), dst)
+
 def main():
 	# Begin Argument Parser Code
 	parser = ArgumentParser()
@@ -81,10 +113,11 @@ def main():
 	print(parsed_args)
 
 	data, header = nrrd.read(parsed_args.nrrd_file)
-
+	file_dir = parsed_args.image_prefix[:-7]
 	normalized_data = normalize_data(data)
 	scaled_data = scale_data(normalized_data, 255.9)
 	save_volume_as_images(scaled_data, parsed_args.image_prefix)
+	deleteBackground(file_dir)
 
 if __name__ == '__main__':
     main()
