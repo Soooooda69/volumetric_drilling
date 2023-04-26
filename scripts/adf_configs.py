@@ -168,7 +168,7 @@ if __name__ == '__main__':
                              'Files (ADF) that need to be synchronized')
 
     # world parameters
-    parser.add_argument('--scale', type=float, default=0.18,
+    parser.add_argument('--scale', type=float, default=5.556,
                         help='Scale factor is the dimension of the volume in 1 axis'
                              'AMBF unit = Meter / scale')
 
@@ -180,7 +180,7 @@ if __name__ == '__main__':
 
     # main camera parameters
     parser.add_argument('--fov', type=float, nargs='+', default=None, help='vertical field of view in radians')
-    parser.add_argument('--focal', type=float, nargs='+', default=0.00362, help='focal length in meters (fx)') # focal/1920 = fx/0.0048 zed:0.0036 micro:0.019
+    parser.add_argument('--focal', type=float, nargs='+', default=0.0038, help='focal length in meters (fx)') # focal/1920 = fx/0.00523 zed:0.0036 0.004
     parser.add_argument('--location', nargs='+', default=[0.0, 0.0, 0.0], help='camera center location (meters)')
     parser.add_argument('--up', nargs='+', default=[0.0, 0.0, 1.0],
                         help='vertical up direction of camera (unit vector), negative y of pixel coordinate')

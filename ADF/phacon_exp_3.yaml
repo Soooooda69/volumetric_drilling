@@ -1,0 +1,29 @@
+# AMBF Version: (0.1)
+bodies: []
+joints: []
+volumes: [VOLUME mastoidectomy_volume_low]
+high resolution path: ./meshes/high_res/
+low resolution path: ./meshes/low_res/
+ignore inter-collision: true
+namespace: /ambf/env/
+
+VOLUME mastoidectomy_volume_low:
+  name: mastoidectomy_volume_low
+  location:
+    position: {x: 0., y: 0., z: 0.}
+    orientation: {r: 0., p: 0., y: 0}
+
+  scale: 1
+  # dimensions: {x: 1.0, y: 1, z: 1.03092784} # 1AU = 194mm conversion factor:0.00515464
+  dimensions: {x: 1, y: 0.5333, z: 0.96} # 1AU = 180mm conversion factor:0.005555
+  # dimensions: {x: 0.87831, y: 1.0, z: 1.0} 
+
+  images:
+    path: ../resources/volumes/phacon_exp_3/
+    prefix: plane00
+    format: png
+    count: 432
+  shaders:
+    path: ./shaders/volume/
+    vertex: shader.vs
+    fragment: shader.fs

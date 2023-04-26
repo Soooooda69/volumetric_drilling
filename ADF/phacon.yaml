@@ -1,0 +1,54 @@
+# AMBF Version: (0.1)
+bodies: []
+joints: []
+volumes: [VOLUME mastoidectomy_volume_low]
+high resolution path: ./meshes/high_res/
+low resolution path: ./meshes/low_res/
+ignore inter-collision: true
+namespace: /ambf/env/
+
+VOLUME mastoidectomy_volume_low:
+  name: mastoidectomy_volume_low
+  location:
+
+    position: {x: -0.71034774, y: -0.03926898, z: 0.06425617}
+    orientation: {r: -1.56381078, p: -0.14601124, y: -0.51315646} ## phacon_1
+    # position: {x: -0.5848278019189613, y: -0.013024529690159698, z: 0.10520240687540854}
+    # orientation: {r: 2.319266629171348, p: -0.7200103405318586, y: -0.027521836567886822} ## phacon_2
+    # position: {x: -0.7367134088542424, y: 0.08213889213369353, z: 0.13489264748693877}
+    # orientation: {r: -2.1664456082894765, p: -0.6350233602097114, y: -0.5867786566566744} ## phacon_3
+    # position: {x: -0.7939605950841249, y: -0.06767167578878813, z: 0.0911603695378718}
+    # orientation: {r: -2.182144094860216, p: -0.5234853766937362, y: -0.6557302605716261} ## phacon_4
+    # position: {x: -0.7937987700880687, y: -0.06734453281008125, z: 0.09134354790618862}
+    # orientation: {r: -2.182012417951598, p: -0.5236765140361783, y: -0.6560140986758309} ## phacon_5
+    # position: {x: -0.7303114582493521, y: 0.1606123301320324, z: 0.16940741464656098}
+    # orientation: {r: -2.813559027630955, p: -0.7347907529562715, y: -0.6124681228109206} ## phacon_6
+    position: {x: -0.8246190571628758, y: 0.030163274162973885, z: 0.03700978206943643}
+    orientation: {r: -1.698017854644317, p: -0.061905567838584474, y: -0.7087695427814846} ## phacon_1026_1
+    # position: {x: -0.7716103963912765, y: -0.21794995904842976, z: -0.0718286262388144}
+    # orientation: {r: -1.2716094761176961, p: 0.3700401267868294, y: -0.7258149555080722} ## phacon_1026_2
+    
+    ####### 1030 drilling experiment ########
+    # position: {x: -0.6706504164345322, y: 0.03493178155905607, z: 0.0775173679542747}
+    # orientation: {r: 2.3281426485394467, p: -0.43356642157433734, y: 0.15810136108794412} ## drill_exp_1
+    # position: {x: -0.6695314527347327, y: 0.03427103259963301, z: 0.07948373172845569}
+    # orientation: {r: 2.326874994648838, p: -0.43501573906037017, y: 0.15790504836884867} ## drill_exp_2
+    # position: {x: -0.6692561197720778, y: 0.02931150201198672, z: 0.06681713053202618}
+    # orientation: {r: 2.3119924407515597, p: -0.43163839883318955, y: 0.1628053206459894} ## drill_exp_3
+    # position: {x: -0.6681491523265507, y: 0.02686757984828588, z: 0.06932461189179209}
+    # orientation: {r: 2.3118999354013625, p: -0.43316806251522033, y: 0.16248117442115834} ## drill_exp_4
+
+  scale: 1
+  # dimensions: {x: 1.0, y: 1, z: 1.03092784} # 1AU = 194mm conversion factor:0.00515464
+  dimensions: {x: 0.87831, y: 1.0, z: 1.0} # 1AU = 180.765mm
+  # dimensions: {x: 0.87831, y: 1.0, z: 1.0} 
+
+  images:
+    path: ../resources/volumes/phacon1/
+    prefix: plane00
+    format: png
+    count: 378
+  shaders:
+    path: ./shaders/volume/
+    vertex: shader.vs
+    fragment: shader.fs

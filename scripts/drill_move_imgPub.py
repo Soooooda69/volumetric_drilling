@@ -18,6 +18,8 @@ from ambf_client import Client
 import time
 from ambf_object import Object
 from ambf_msgs.msg import ObjectState, RigidBodyCmd, CameraCmd
+from std_msgs.msg import Float32MultiArray
+
 
 sys.path.insert(0, '/home/shc/Twin-S/util')
 from Solver import solver
@@ -25,6 +27,8 @@ from dataLoader import dataLoader
 sol = solver()
 ld = dataLoader()
 
+global cam_xyz_offset
+cam_xyz_offset = np.zeros([3,1])
 
 def move(drill_pose, cam_pose, drill_Cmd, cam_Cmd):
     '''
@@ -107,16 +111,17 @@ def eval_drill_tip(T_c_d, ros_limg):
     
     np_arr = np.fromstring(ros_limg.data, np.uint8)
     left_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-    T_c_d_t = T_c_d[:3, 3].reshape(3,1)
-    pix,val,dist = projectWithoutDistortion(cam_mtx, 1920, 1080, T_c_d_t)
+    t_c_d = T_c_d[:3, 3].reshape(3,1)
+    pix,val,dist = projectWithoutDistortion(cam_mtx, 1920, 1080, t_c_d)
+    
     # print(pix,val,dist)
     imgpt = np.int32(pix).reshape(-1, 2)
     # print('imgpt:', imgpt[0])
     imgpt[0][0] = imgpt[0][0]
     imgpt[0][1] = imgpt[0][1]
     tip_point = (imgpt[0][0], imgpt[0][1])
-    eval_image = cv2.circle(left_image, tip_point, 5, [0, 0, 255], thickness=5)  
+    eval_image = cv2.circle(left_image, tip_point, 5, [0, 0, 255], thickness=5)
+    eval_image = cv2.resize(eval_image, (640, 360))
     return eval_image
 
 
@@ -168,6 +173,7 @@ def callback(*publishers):
     - camhand_pose : pose msg of camera hand in tracker coordinate
     - drill_pose : pose msg of drill in tracker coordinate
     '''
+    global cam_xyz_offset
     global pub_drill, pub_camera, pub_limage, pub_eval_image, args
 
     # [camhand_pose, drill_pose, pan_pose, limage] = publishers
@@ -175,11 +181,12 @@ def callback(*publishers):
         [camhand_pose, drill_pose, pan_pose, limage, segm] = publishers
     else:
         [camhand_pose, drill_pose, pan_pose, limage] = publishers
-    # s1 = time.time()
-
+    
     drill_cmd = RigidBodyCmd()
     cam_cmd = CameraCmd()
-    
+    drill_cmd.cartesian_cmd_type = 1
+    cam_cmd.enable_position_controller = 1
+
     ## convert quaternion to 4x4 transformation matrix 
     T_o_cb = quat2trans(sol.rosmsg2quat(camhand_pose))
     T_o_db = quat2trans(sol.rosmsg2quat(drill_pose))
@@ -188,21 +195,27 @@ def callback(*publishers):
     ## by annotating A2B means transformation of B w.r.t A or F_A_B
     ## F_o_cam = F_o_camhand * X
     T_o_c = np.dot(T_o_cb, X)
+
     T_c_o = sol.invTransformation(T_o_c) 
 
     ## F_cam_drill = F_cam_o * F_o_drill
-    T_c_db =np.dot(T_c_o, T_o_db)
+    T_c_db =T_c_o@T_o_db
+
+    ## T_db_d
+    # R_db_d = np.eye(3)
+    T_db_d = np.vstack([np.hstack([R_db_d, t_tip]),np.array([0,0,0,1]).reshape(1,4)])
 
     ## t_cam_tip = R_cam_drill * t_tip + t_cam_drill
-    t_c_d = np.dot(T_c_db[:3, :3], tip) + T_c_db[:3, 3].reshape(3,-1)
-    print("tip: ", t_c_d.reshape(-1,3))
+    # t_c_d = np.dot(T_c_db[:3, :3], t_tip) + T_c_db[:3, 3].reshape(3,-1)
+    T_c_d = T_c_db@T_db_d
+    print("tip: ", T_c_d[:3, 3].reshape(-1,3))
 
     ## F_cam_tip = [R_cam_drill * R_drill_tip, t_cam_tip]
-    T_c_d = np.vstack([np.hstack([T_c_db[:3,:3]@R_db_d, t_c_d]),np.array([0,0,0,1]).reshape(1,4)])
+    T_o_d = T_o_db@T_db_d
 
     ## F_o_tip = [R_o_drill, t_o_tip]  This is most likely wrong!! Need R_drill_tip
     ## Update: F_o_tip = F_o_cam * F_cam_tip
-    op2tip = T_o_c @ T_c_d
+    # op2tip = T_o_c @ T_c_d
 
     ## F_cv_ambf
     extrinsic = np.array([[0, 1, 0, 0], [0, 0, -1, 0],
@@ -213,19 +226,24 @@ def callback(*publishers):
     T_ambf_o = sol.invTransformation(T_o_ambf)
 
     ## F_ambf_tip = F_ambf_op * F_o_tip
-    ambf2tip = np.dot(T_ambf_o, op2tip)
+    # ambf2tip = np.dot(T_ambf_o, op2tip)
 
     ## R_ambf_tip = R_ambf_tip * R_offset
     # We would like to clarify that the calibration process is a requirement prior to running the digital twins system such that the virtual models can be aligned with the physical objects. Thus, the calibration process does not impact on the framerate of Twin-S after launching. The time spent for calibration is approximately 10 minutes The speed of Twin-S will be impacted by the speed of simulation, where the computational time breakdown is ???. We will add the above results and discussion to Appendix ???. 
-    drill_cmd.cartesian_cmd_type = 1
-    cam_cmd.enable_position_controller = 1
 
     # Fix the phacon to AMBF origin
     T_o_p = T_o_pb@T_pb_p
     T_p_o = sol.invTransformation(T_o_p)
 
+    # adjust the offset
+    T_c_corr = np.identity(4)
+    T_c_corr[0,3] = cam_xyz_offset[0]*1000
+    T_c_corr[1,3] = cam_xyz_offset[1]*1000 
+    T_c_corr[2,3] = cam_xyz_offset[2]*1000
+    T_o_c = np.dot(T_o_c, T_c_corr)
+    
     T_p_c = T_p_o@T_o_c
-    T_p_d = T_p_c@T_c_d
+    T_p_d = T_p_o@T_o_d
     T_p_c = T_p_c@extrinsic
     drill_cmd, cam_cmd = move(T_p_d, T_p_c, drill_cmd, cam_cmd)
 
@@ -241,31 +259,25 @@ def callback(*publishers):
         # add the left image with evaluation circle 
         eval_limage = eval_drill_tip(T_c_d, limage)
         #### Create eval CompressedImage topic ####
-        msg = CompressedImage()
-        msg.header.stamp = rospy.Time.now()
-        msg.format = "jpeg"
+        s = time.time()
         msg.data = np.array(cv2.imencode('.jpg', eval_limage)[1]).tostring()
+        e = time.time()
+        print(e-s)
         # Publish new image
         pub_eval_image.publish(msg)
+        
     
     if args.eval_segm:
         limage.header.stamp = rospy.Time.now()
         segmimg_arr = np.fromstring(segm.data, np.uint8)
         segm_image = cv2.imdecode(segmimg_arr, cv2.IMREAD_COLOR)
 
-        shift_coordinate = [np.rint((540-511)*2/3).astype(int), np.rint((960-936)*2/3).astype(int)] #shift on hight and width
-        rec_segm_image = cv2.copyMakeBorder(segm_image, 0, shift_coordinate[0], 0, shift_coordinate[1], cv2.BORDER_CONSTANT)
-        rec_segm_image = rec_segm_image[shift_coordinate[0]:,shift_coordinate[1]:]
-
         limg_arr = np.fromstring(limage.data, np.uint8)
         limg_image = cv2.imdecode(limg_arr, cv2.IMREAD_COLOR)
         l_image = cv2.resize(limg_image, (640, 360))
-        overlap = cv2.addWeighted(l_image, 0.5, rec_segm_image, 0.5, 0)
+        overlap = cv2.addWeighted(l_image, 0.5, segm_image, 0.5, 0)
 
         #### Create eval CompressedImage topic ####
-        msg = CompressedImage()
-        msg.header.stamp = rospy.Time.now()
-        msg.format = "jpeg"
         msg.data = np.array(cv2.imencode('.jpg', overlap)[1]).tostring()
         # Publish new image
         pub_eval_segm.publish(msg)
@@ -273,9 +285,14 @@ def callback(*publishers):
 def my_shutdown_hook():
     print("in my_shutdown_hook")
 
+def cam_offset_cb(msg):
+    global cam_xyz_offset
+    cam_xyz_offset[0] = msg.data[0]
+    cam_xyz_offset[1] = msg.data[1]
+    cam_xyz_offset[2] = msg.data[2]
 
 def main():
-    global pub_drill, pub_camera, pub_limage, pub_eval_image, pub_eval_segm, cam_mtx, args, X, tip, R_db_d, T_pb_p
+    global pub_drill, pub_camera, pub_limage, pub_eval_image, pub_eval_segm, cam_mtx, args, X, t_tip, R_db_d, T_pb_p, msg
 
     cam_mtx = np.load('/home/shc/Twin-S/params/zed_M_l.npy')
     ## X: hand-eye transformation F_camhand_cam
@@ -283,10 +300,10 @@ def main():
     X = np.load(args.X_path)
 
     ## Drill tip in drill coordinate t_tip from pivot calibration
-    tip = np.load('/home/shc/Twin-S/params/drill_tip_0411.npy')
+    t_tip = np.load('/home/shc/Twin-S/params/drill_pivot_0425_.npy')
 
     ## Rotation of tip w.r.t drill marker got from rotation calibration
-    R_db_d =np.load('/home/shc/Twin-S/params/R_d_tip.npy')
+    R_db_d =np.load('/home/shc/Twin-S/params/R_db_d_.npy')
 
     ## Registration result
     T_p_pb = np.load('/home/shc/Twin-S/params/phacon2pan_0411.npy')
@@ -294,6 +311,11 @@ def main():
 
     # Initialize ROS node
     rospy.init_node('image_extract_node', anonymous=True)
+
+    # Define pub msg
+    msg = CompressedImage()
+    msg.header.stamp = rospy.Time.now()
+    msg.format = "jpeg"
 
     # Subscribers
     limage_sub = message_filters.Subscriber('fwd_limage/compressed', CompressedImage)
@@ -316,11 +338,13 @@ def main():
     else:
         ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub], 50, 0.5)
         ts.registerCallback(callback)
-    
+
+    x_sub = rospy.Subscriber('/camera/xyz_offset', Float32MultiArray, cam_offset_cb, queue_size=1)
+
     rospy.spin()
     rospy.on_shutdown(my_shutdown_hook)
 
-
+    
 if __name__ == '__main__':
 
     parser = ArgumentParser()

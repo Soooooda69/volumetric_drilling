@@ -263,7 +263,7 @@ void afVolmetricDrillingPlugin::physicsUpdate(double dt){
             //Publisher for voxels removed
             if(m_storedColor != m_boneColor)
             {
-                m_panelManager.setVisible(m_warningLabel, true);
+//                m_panelManager.setVisible(m_warningLabel, true);
             }
         }
 
