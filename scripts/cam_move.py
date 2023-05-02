@@ -59,15 +59,6 @@ def move(drill_pose, cam_pose, drill_Cmd, cam_Cmd):
     drill_t = drill_pose[:3,3]/conversion/1000
     cam_t = cam_pose[:3,3]/conversion/1000
 
-    # ## update the command of drill
-    # drill_Cmd.pose.position.x = drill_t[0]
-    # drill_Cmd.pose.position.y = drill_t[1]
-    # drill_Cmd.pose.position.z = drill_t[2]
-    # drill_Cmd.pose.orientation.x = drill_quat[0]
-    # drill_Cmd.pose.orientation.y = drill_quat[1]
-    # drill_Cmd.pose.orientation.z = drill_quat[2]
-    # drill_Cmd.pose.orientation.w = drill_quat[3]
-
     ## update the command of drill and camera
     cam_Cmd.pose.position.x = cam_t[0]
     cam_Cmd.pose.position.y = cam_t[1]
@@ -138,7 +129,6 @@ def callback(*publishers):
     ## F_o_cam = F_o_camhand * X
     T_o_c = T_o_cb @ T_cb_c
     T_c_corr = np.identity(4)
-    # T_c_corr[0,3] = 0.06305 / 5.0 * 1000
     T_c_corr[0,3] = cam_xyz_offset[0]*1000 # x_mm = x_px / f_px * f_mm = 24 / 1446.7 * 4 = 0.066
     T_c_corr[1,3] = cam_xyz_offset[1]*1000 # y_mm = 29 / 1446 * 4 = 0.08
     T_c_corr[2,3] = cam_xyz_offset[2]*1000
@@ -178,10 +168,6 @@ def callback(*publishers):
         limage.header.stamp = rospy.Time.now()
         segmimg_arr = np.fromstring(segm.data, np.uint8)
         segm_image = cv2.imdecode(segmimg_arr, cv2.IMREAD_COLOR)
-
-        # shift_coordinate = [np.rint((540-511)*2/3).astype(int), np.rint((960-936)*2/3).astype(int)] #shift on hight and width
-        # rec_segm_image = cv2.copyMakeBorder(segm_image, 0, shift_coordinate[0], 0, shift_coordinate[1], cv2.BORDER_CONSTANT)
-        # rec_segm_image = rec_segm_image[shift_coordinate[0]:,shift_coordinate[1]:]
 
         limg_arr = np.fromstring(limage.data, np.uint8)
         limg_image = cv2.imdecode(limg_arr, cv2.IMREAD_COLOR)
