@@ -180,7 +180,7 @@ def callback(*publishers):
     if args.eval_segm:
         [camhand_pose, drill_pose, pan_pose, limage, segm] = publishers
     else:
-        [camhand_pose, drill_pose, pan_pose, limage] = publishers
+        [camhand_pose, drill_pose, pan_pose, limage, rimage] = publishers
     
     drill_cmd = RigidBodyCmd()
     cam_cmd = CameraCmd()
@@ -253,7 +253,16 @@ def callback(*publishers):
 
     if args.sim_sync:
         limage.header.stamp = rospy.Time.now()
+        rimage.header.stamp = rospy.Time.now()
+        pan_pose.header.stamp = rospy.Time.now()
+        camhand_pose.header.stamp = rospy.Time.now()
+        drill_pose.header.stamp = rospy.Time.now()
+        
         pub_limage.publish(limage)
+        pub_rimage.publish(rimage)
+        pub_pose_pan.publish(pan_pose)
+        pub_pose_drill.publish(drill_pose)
+        pub_pose_camhand.publish(camhand_pose)
 
     if args.eval_tip_rpj:
         # add the left image with evaluation circle 
@@ -292,7 +301,7 @@ def cam_offset_cb(msg):
     cam_xyz_offset[2] = msg.data[2]
 
 def main():
-    global pub_drill, pub_camera, pub_limage, pub_eval_image, pub_eval_segm, cam_mtx, args, X, t_tip, R_db_d, T_pb_p, msg
+    global pub_drill, pub_camera, pub_limage,pub_rimage, pub_eval_image, pub_pose_pan, pub_pose_drill, pub_pose_camhand, pub_eval_segm, cam_mtx, args, X, t_tip, R_db_d, T_pb_p, msg
 
     cam_mtx = np.load('/home/shc/Twin-S/params/zed_M_l.npy')
     ## X: hand-eye transformation F_camhand_cam
@@ -319,6 +328,7 @@ def main():
 
     # Subscribers
     limage_sub = message_filters.Subscriber('fwd_limage/compressed', CompressedImage)
+    rimage_sub = message_filters.Subscriber('fwd_rimage/compressed', CompressedImage)
     pose_pan_sub = message_filters.Subscriber('fwd_pose_pan', PoseStamped)
     pose_drill_sub = message_filters.Subscriber('fwd_pose_drill', PoseStamped)
     pose_camhand_sub = message_filters.Subscriber('fwd_pose_camhand', PoseStamped)
@@ -328,6 +338,10 @@ def main():
     pub_camera = rospy.Publisher('/ambf/env/cameras/main_camera/Command',CameraCmd, tcp_nodelay=True, queue_size=10)
     if args.sim_sync:
         pub_limage = rospy.Publisher('/pss_limage/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
+        pub_rimage = rospy.Publisher('/pss_rimage/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
+        pub_pose_pan = rospy.Publisher('/pss_pose_pan',PoseStamped, tcp_nodelay=True, queue_size=10)
+        pub_pose_drill = rospy.Publisher('/pss_pose_drill',PoseStamped, tcp_nodelay=True, queue_size=10)
+        pub_pose_camhand = rospy.Publisher('/pss_pose_camhand',PoseStamped, tcp_nodelay=True, queue_size=10)
     if args.eval_tip_rpj:
         pub_eval_image = rospy.Publisher('/eval_drill/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
     if args.eval_segm:
@@ -336,7 +350,7 @@ def main():
         ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, segm_sub], 50, 0.5)
         ts.registerCallback(callback)
     else:
-        ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub], 50, 0.5)
+        ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, rimage_sub], 50, 0.5)
         ts.registerCallback(callback)
 
     x_sub = rospy.Subscriber('/camera/xyz_offset', Float32MultiArray, cam_offset_cb, queue_size=1)

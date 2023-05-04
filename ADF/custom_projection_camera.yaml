@@ -11,10 +11,10 @@ custom_projection_camera:
   namespace: cameras/
   name: custom_projection_camera
   location: {x: 0.0, y: 0.0, z: 0.0}
-  look at: {x: -1.0, y: 0.0, z: 0.0}
+  look at: {x: -0.05399568034557235, y: 0.0, z: 0.0}
   up: {x: 0.0, y: 0.0, z: 1.0}
-  clipping plane: {near: 2.0135309278350517, far: 1006.7654639175257}
-  field view angle: 0.17951634837990105
+  clipping plane: {near: 0.0017998560115190785, far: 8.999280057595392}
+  field view angle: 0.7382243147638285
   monitor: 0
   parent: main_camera
   # multipass: true
@@ -25,7 +25,7 @@ custom_projection_camera:
     # vertex: shader.vs
     # fragment: shader.fs
   publish image interval: 5   # Publish every nth scene update
-  # publish depth: true
+  publish depth: true
   # publish depth noise: {mean: 0.1, std_dev: 0.01, bias: 0.0}
   # publish depth interval: 5   # Publish every nth scene update
   publish image resolution: {width: 640, height: 360}
@@ -34,10 +34,15 @@ custom_projection_camera:
   #    vertex: shader.vs
   #    fragment: shader.fs
   # multipass: true
-  projection matrix: [[ 4.52079582e+00,  0.00000000e+00, -1.92513924e+00,  0.00000000e+00],
- [ 0.00000000e+00, 8.03697035e+00, 1.83940023e+00,  0.00000000e+00],
- [ 0.00000000e+00,  0.00000000e+00, -1.00040008e+00, -3.60043211e-03],
- [ 0.00000000e+00,  0.00000000e+00, -1.00000000e+00,  0.00000000e+00]]
+#   projection matrix: [[ 4.52079582e+00,  0.00000000e+00, -1.92513924e+00,  0.00000000e+00],
+#  [ 0.00000000e+00, 8.03697035e+00, 1.83940023e+00,  0.00000000e+00],
+#  [ 0.00000000e+00,  0.00000000e+00, -1.00040008e+00, -3.60043211e-03],
+#  [ 0.00000000e+00,  0.00000000e+00, -1.00000000e+00,  0.00000000e+00]]
+
+  projection matrix: [[ 1.50693194,  0.,          0.02495359,          0.        ],
+  [ 0.       ,   2.67899012 , -0.05353326,          0.        ],
+  [ 0.     ,     0.  ,       -1.00040008 ,-0.00360043],
+  [ 0.      ,    0.  ,       -1.  ,        0.        ]]
   # projection matrix: [ # Copied from existing main_camera's output
   # [3.9062, 0.0000, 0.0000, 0.0000],
   # [0.0000, 11.1111, 0.0000, 0.0000],
