@@ -50,7 +50,7 @@ main_camera:
   # up: {x: 0.0, y: 0.4, z: 1.0}
   up: {x: 0.0, y: 0.0, z: 1.0}
   clipping plane: {near: 0.0017998560115190785, far: 8.999280057595392}
-  field view angle: 0.7382243147638285
+  field view angle: 0.7142015162033846
   monitor: 0
   # multipass: true
   visible: true
@@ -68,7 +68,11 @@ main_camera:
     path: ../shaders/preprocessing/
     vertex: shader.vs
     fragment: shader.fs
-  # publish image resolution: {width: 1920, height: 1080}
+
+  projection matrix: [[1.50693194, 0., 0.04166667, 0.], [0., 2.67899012, -0.05353326,
+      0.], [0., 0., -1.00040008, -0.00360043], [0., 0., -1., 0.]]
+  plugins: [{name: camera_projection_override, path: ../../build/, filename: libcamera_projection_override.so}]
+
   # depth compute shaders:
   #    path: ../../../ambf_shaders/depth
   #    vertex: shader.vs
@@ -97,7 +101,6 @@ cameraL:
   # publish depth noise: {mean: 0.1, std_dev: 0.01, bias: 0.0}
   # publish depth interval: 1 # Publish every nth scene update
   publish image resolution: {width: 640, height: 360}
-  # publish image resolution: {width: 1920, height: 1080}
   # depth compute shaders:
   #    path: ../../../ambf_shaders/depth
   #    vertex: shader.vs
@@ -125,7 +128,6 @@ cameraR:
   # # publish depth noise: {mean: 0.1, std_dev: 0.01, bias: 0.0}
   # publish depth interval: 1 # Publish every nth scene update
   publish image resolution: {width: 640, height: 360}
-  # publish image resolution: {width: 1920, height: 1080}
   # depth compute shaders:
   #    path: ../../../ambf_shaders/depth
   #    vertex: shader.vs

@@ -44,7 +44,7 @@
 #include <boost/program_options.hpp>
 
 DrillManager::DrillManager(){
-    m_units_mmToSim = 0.01007;
+    m_units_mmToSim = 0.011;
 }
 
 void DrillManager::cleanup()

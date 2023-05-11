@@ -22,7 +22,7 @@ import ros_numpy
 import rospy
 from ambf_msgs.msg import RigidBodyState, CameraState
 from cv_bridge import CvBridge, CvBridgeError
-from sensor_msgs.msg import Image, PointCloud2
+from sensor_msgs.msg import CompressedImage, PointCloud2
 
 try:
     from vdrilling_msgs.msg import points, UInt8Stamped, VolumeProp
@@ -273,7 +273,7 @@ def setup_subscriber(args):
 
     if args.stereoL_topic != 'None':
         if args.stereoL_topic in active_topics:
-            stereoL_sub = message_filters.Subscriber(args.stereoL_topic, Image)
+            stereoL_sub = message_filters.Subscriber(args.stereoL_topic, CompressedImage)
             subscribers += [stereoL_sub]
             container['l_img'] = []
             topics += [args.stereoL_topic]
@@ -293,7 +293,7 @@ def setup_subscriber(args):
 
     if args.stereoR_topic != 'None':
         if args.stereoR_topic in active_topics:
-            stereoR_sub = message_filters.Subscriber(args.stereoR_topic, Image)
+            stereoR_sub = message_filters.Subscriber(args.stereoR_topic, CompressedImage)
             subscribers += [stereoR_sub]
             container['r_img'] = []
             topics += [args.stereoR_topic]
@@ -303,7 +303,7 @@ def setup_subscriber(args):
 
     if args.segm_topic != 'None':
         if args.segm_topic in active_topics:
-            segm_sub = message_filters.Subscriber(args.segm_topic, Image)
+            segm_sub = message_filters.Subscriber(args.segm_topic, CompressedImage)
             subscribers += [segm_sub]
             container['segm'] = []
             topics += [args.segm_topic]

@@ -70,7 +70,7 @@ def main():
 
     # Subscribers
     pss_limage_sub = message_filters.Subscriber('pss_limage/compressed', CompressedImage)
-    segm_sub = message_filters.Subscriber('/ambf/env/cameras/custom_projection_camera/ImageData/compressed', CompressedImage)
+    segm_sub = message_filters.Subscriber('/ambf/env/cameras/segmentation_camera/ImageData/compressed', CompressedImage)
     pcd_sub = message_filters.Subscriber('/ambf/env/cameras/main_camera/DepthData', PointCloud2)   
 
     pub_eval_segm = rospy.Publisher('/eval_segm/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)

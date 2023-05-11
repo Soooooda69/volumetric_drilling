@@ -177,11 +177,13 @@ def callback(*publishers):
     global pub_drill, pub_camera, pub_limage, pub_eval_image, args
 
     # [camhand_pose, drill_pose, pan_pose, limage] = publishers
-    if args.eval_segm:
-        [camhand_pose, drill_pose, pan_pose, limage, segm] = publishers
-    else:
-        [camhand_pose, drill_pose, pan_pose, limage, rimage] = publishers
-    
+    # if args.eval_segm:
+    #     [camhand_pose, drill_pose, pan_pose, limage, segm] = publishers
+    # else:
+    #     [camhand_pose, drill_pose, pan_pose, limage, rimage] = publishers
+
+    [camhand_pose, drill_pose, pan_pose, limage, rimage] = publishers
+
     drill_cmd = RigidBodyCmd()
     cam_cmd = CameraCmd()
     drill_cmd.cartesian_cmd_type = 1
@@ -203,12 +205,12 @@ def callback(*publishers):
 
     ## T_db_d
     # R_db_d = np.eye(3)
-    T_db_d = np.vstack([np.hstack([R_db_d, t_tip]),np.array([0,0,0,1]).reshape(1,4)])
+    
 
     ## t_cam_tip = R_cam_drill * t_tip + t_cam_drill
     # t_c_d = np.dot(T_c_db[:3, :3], t_tip) + T_c_db[:3, 3].reshape(3,-1)
     T_c_d = T_c_db@T_db_d
-    print("tip: ", T_c_d[:3, 3].reshape(-1,3))
+    # print("tip: ", T_c_d[:3, 3].reshape(-1,3))
 
     ## F_cam_tip = [R_cam_drill * R_drill_tip, t_cam_tip]
     T_o_d = T_o_db@T_db_d
@@ -224,12 +226,6 @@ def callback(*publishers):
     ## F_o_ambf = F_o_cam * F_cv_ambf                    
     T_o_ambf = np.dot(T_o_c, extrinsic)
     T_ambf_o = sol.invTransformation(T_o_ambf)
-
-    ## F_ambf_tip = F_ambf_op * F_o_tip
-    # ambf2tip = np.dot(T_ambf_o, op2tip)
-
-    ## R_ambf_tip = R_ambf_tip * R_offset
-    # We would like to clarify that the calibration process is a requirement prior to running the digital twins system such that the virtual models can be aligned with the physical objects. Thus, the calibration process does not impact on the framerate of Twin-S after launching. The time spent for calibration is approximately 10 minutes The speed of Twin-S will be impacted by the speed of simulation, where the computational time breakdown is ???. We will add the above results and discussion to Appendix ???. 
 
     # Fix the phacon to AMBF origin
     T_o_p = T_o_pb@T_pb_p
@@ -251,13 +247,17 @@ def callback(*publishers):
     pub_drill.publish(drill_cmd)
     pub_camera.publish(cam_cmd)
 
+    # visualize 
+    spinner_char = spinner[rospy.Time.now().secs % len(spinner)]
+    print(f"Moving... {spinner_char}", end="\r")
+
     if args.sim_sync:
         limage.header.stamp = rospy.Time.now()
         rimage.header.stamp = rospy.Time.now()
         pan_pose.header.stamp = rospy.Time.now()
         camhand_pose.header.stamp = rospy.Time.now()
         drill_pose.header.stamp = rospy.Time.now()
-        
+
         pub_limage.publish(limage)
         pub_rimage.publish(rimage)
         pub_pose_pan.publish(pan_pose)
@@ -276,20 +276,20 @@ def callback(*publishers):
         pub_eval_image.publish(msg)
         
     
-    if args.eval_segm:
-        limage.header.stamp = rospy.Time.now()
-        segmimg_arr = np.fromstring(segm.data, np.uint8)
-        segm_image = cv2.imdecode(segmimg_arr, cv2.IMREAD_COLOR)
+    # if args.eval_segm:
+    #     limage.header.stamp = rospy.Time.now()
+    #     segmimg_arr = np.fromstring(segm.data, np.uint8)
+    #     segm_image = cv2.imdecode(segmimg_arr, cv2.IMREAD_COLOR)
 
-        limg_arr = np.fromstring(limage.data, np.uint8)
-        limg_image = cv2.imdecode(limg_arr, cv2.IMREAD_COLOR)
-        l_image = cv2.resize(limg_image, (640, 360))
-        overlap = cv2.addWeighted(l_image, 0.5, segm_image, 0.5, 0)
+    #     limg_arr = np.fromstring(limage.data, np.uint8)
+    #     limg_image = cv2.imdecode(limg_arr, cv2.IMREAD_COLOR)
+    #     l_image = cv2.resize(limg_image, (640, 360))
+    #     overlap = cv2.addWeighted(l_image, 0.5, segm_image, 0.5, 0)
 
-        #### Create eval CompressedImage topic ####
-        msg.data = np.array(cv2.imencode('.jpg', overlap)[1]).tostring()
-        # Publish new image
-        pub_eval_segm.publish(msg)
+    #     #### Create eval CompressedImage topic ####
+    #     msg.data = np.array(cv2.imencode('.jpg', overlap)[1]).tostring()
+    #     # Publish new image
+    #     pub_eval_segm.publish(msg)
 
 def my_shutdown_hook():
     print("in my_shutdown_hook")
@@ -301,7 +301,8 @@ def cam_offset_cb(msg):
     cam_xyz_offset[2] = msg.data[2]
 
 def main():
-    global pub_drill, pub_camera, pub_limage,pub_rimage, pub_eval_image, pub_pose_pan, pub_pose_drill, pub_pose_camhand, pub_eval_segm, cam_mtx, args, X, t_tip, R_db_d, T_pb_p, msg
+    global pub_drill, pub_camera, pub_limage,pub_rimage, pub_eval_image, pub_pose_pan, pub_pose_drill, pub_pose_camhand, pub_eval_segm, cam_mtx, args, X, t_tip, R_db_d, T_pb_p, T_db_d, msg, spinner
+    spinner = ['-', '\\', '|', '/']
 
     cam_mtx = np.load('/home/shc/Twin-S/params/zed_M_l.npy')
     ## X: hand-eye transformation F_camhand_cam
@@ -309,10 +310,11 @@ def main():
     X = np.load(args.X_path)
 
     ## Drill tip in drill coordinate t_tip from pivot calibration
-    t_tip = np.load('/home/shc/Twin-S/params/drill_pivot_0425_.npy')
-
+    t_tip = np.load('/home/shc/Twin-S/params/drill_pivot_0505.npy')
+    
     ## Rotation of tip w.r.t drill marker got from rotation calibration
     R_db_d =np.load('/home/shc/Twin-S/params/R_db_d_.npy')
+    T_db_d = np.vstack([np.hstack([R_db_d, t_tip]),np.array([0,0,0,1]).reshape(1,4)])
 
     ## Registration result
     T_p_pb = np.load('/home/shc/Twin-S/params/phacon2pan_0411.npy')
@@ -344,10 +346,12 @@ def main():
         pub_pose_camhand = rospy.Publisher('/pss_pose_camhand',PoseStamped, tcp_nodelay=True, queue_size=10)
     if args.eval_tip_rpj:
         pub_eval_image = rospy.Publisher('/eval_drill/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
-    if args.eval_segm:
-        segm_sub = message_filters.Subscriber('/ambf/env/cameras/segmentation_camera/ImageData/compressed', CompressedImage) ##'/ambf/env/cameras/segmentation_camera/ImageData/compressed'
-        pub_eval_segm = rospy.Publisher('/eval_segm/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
-        ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, segm_sub], 50, 0.5)
+    # if args.eval_segm:
+    #     segm_sub = message_filters.Subscriber('/ambf/env/cameras/segmentation_camera/ImageData/compressed', CompressedImage) ##'/ambf/env/cameras/segmentation_camera/ImageData/compressed'
+    #     pub_eval_segm = rospy.Publisher('/eval_segm/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
+    #     ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, segm_sub], 50, 0.5)
+    #     ts.registerCallback(callback)
+        ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, rimage_sub], 50, 0.5)
         ts.registerCallback(callback)
     else:
         ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, rimage_sub], 50, 0.5)
@@ -364,7 +368,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--handeye", dest="X_path", help="path of handeye transformation X", default='hand_eye_X.npy', type=str)
     parser.add_argument("--eval_tip_rpj", dest='eval_tip_rpj', help='pulish images to evaluate the drill tip reprojection.', action='store_true')
-    parser.add_argument("--eval_segm", dest='eval_segm', help='pulish images to evaluate the overlay of segmentation mask and the real scene.', action='store_true')
+    # parser.add_argument("--eval_segm", dest='eval_segm', help='pulish images to evaluate the overlay of segmentation mask and the real scene.', action='store_true')
     parser.add_argument("--sim_sync", dest='sim_sync', help='sync the recorded images with the sim scene.', action='store_true')
 
     args = parser.parse_args()

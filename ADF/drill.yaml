@@ -2,21 +2,21 @@
 bodies: [BODY mastoidectomy_drill]
 joints: []
 volumes: []
-high resolution path: ./meshes/high_res/
-low resolution path: ./meshes/low_res/
+high resolution path: meshes/high_res/
+low resolution path: meshes/low_res/
 ignore inter-collision: true
 namespace: /ambf/env/
 
 BODY mastoidectomy_drill:
-  name: mastoidectomy_drill
-  mesh: drillMesh.obj
+  name: 6mm
+  mesh: 6mm.OBJ
   mass: 0.0
   inertia:
     ix: 0.0
     iy: 0.0
     iz: 0.0
   collision margin: 0.001
-  scale: 1.0 # this is probably not the right scale now, need to double check?
+  scale: 5.555 #
   location:
     position:
       x: -5.0

@@ -64,7 +64,6 @@ def camera_config(params, args, name):
         # convert focal length in meters to fov
         fov = 2 * math.atan(sensor_height / 2 / focal)
         camera['field view angle'] = fov
-
     camera['publish image resolution']['width'] = args.res[0]
     camera['publish image resolution']['height'] = args.res[1]
     camera['publish image interval'] = args.image_interval
@@ -180,7 +179,7 @@ if __name__ == '__main__':
 
     # main camera parameters
     parser.add_argument('--fov', type=float, nargs='+', default=None, help='vertical field of view in radians')
-    parser.add_argument('--focal', type=float, nargs='+', default=0.0038, help='focal length in meters (fx)') # focal/1920 = fx/0.00523 zed:0.0036 0.004
+    parser.add_argument('--focal', type=float, nargs='+', default=0.00394, help='focal length in meters (fx)') # focal/1920 = fx/0.00523 zed:0.0036 0.004
     parser.add_argument('--location', nargs='+', default=[0.0, 0.0, 0.0], help='camera center location (meters)')
     parser.add_argument('--up', nargs='+', default=[0.0, 0.0, 1.0],
                         help='vertical up direction of camera (unit vector), negative y of pixel coordinate')

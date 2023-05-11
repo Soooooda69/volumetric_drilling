@@ -237,7 +237,7 @@ BODY mastoidectomy_drill:
   name: mastoidectomy_drill
   mesh: ''
   collision mesh: ''
-  collision mesh type: ''
+  collision mesh type: CONCAVE_MESH
   mass: 0.0
   inertia:
     ix: 0.0
