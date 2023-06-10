@@ -9,29 +9,16 @@ from argparse import ArgumentParser
 import sys
 from sensor_msgs.msg import CompressedImage, Image, PointCloud2
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Pose
 from scipy.spatial.transform import Rotation as R
 from cv_bridge import CvBridge
 import cv2
 bridge = CvBridge()
-from ambf_client import Client
-import time
-from ambf_object import Object
+import json
 from ambf_msgs.msg import ObjectState, RigidBodyCmd, CameraCmd
-from std_msgs.msg import Float32MultiArray
 
-sys.path.insert(0, '/home/shc/Twin-S/util')
+sys.path.append('/home/shc/Twin-S/util')
 from Solver import solver
-from dataLoader import dataLoader
 sol = solver()
-ld = dataLoader()
-
-global cam_xyz_offset
-cam_xyz_offset = np.zeros([3,1])
-# cam_xyz_offset[0] = 0.06305 / 2.0
-# cam_xyz_offset[1] = 0.06305 / 2.0
-# cam_xyz_offset[2] = 0.0
-
 
 def move(drill_pose, cam_pose, drill_Cmd, cam_Cmd):
     '''
@@ -99,6 +86,27 @@ def quat2trans(quat):
 
     return homo
 
+def calculate_transformation(camhand_pose, pan_pose):
+    ## convert quaternion to 4x4 transformation matrix 
+    T_o_cb = quat2trans(sol.rosmsg2quat(camhand_pose))
+
+    T_o_pb = quat2trans(sol.rosmsg2quat(pan_pose))
+
+    ## by annotating A2B means transformation of B w.r.t A or F_A_B
+    ## F_o_cam = F_o_camhand * X
+    T_o_c = T_o_cb @ T_cb_c
+
+    ## F_cv_ambf
+    extrinsic = np.array([[0, 1, 0, 0], [0, 0, -1, 0],
+                          [-1, 0, 0, 0], [0, 0, 0, 1]])
+
+    
+
+    # Fix the phacon to AMBF origin
+    T_o_p = T_o_pb@T_pb_p
+    T_p_o = sol.invTransformation(T_o_p)
+    T_p_c = T_p_o@T_o_c@extrinsic
+    return T_p_c
 
 def callback(*publishers):
     global cam_xyz_offset
@@ -119,39 +127,17 @@ def callback(*publishers):
 
     drill_cmd = RigidBodyCmd()
     cam_cmd = CameraCmd()
-    
-    ## convert quaternion to 4x4 transformation matrix 
-    T_o_cb = quat2trans(sol.rosmsg2quat(camhand_pose))
-
-    T_o_pb = quat2trans(sol.rosmsg2quat(pan_pose))
-
-    ## by annotating A2B means transformation of B w.r.t A or F_A_B
-    ## F_o_cam = F_o_camhand * X
-    T_o_c = T_o_cb @ T_cb_c
-    T_c_corr = np.identity(4)
-    T_c_corr[0,3] = cam_xyz_offset[0]*1000 # x_mm = x_px / f_px * f_mm = 24 / 1446.7 * 4 = 0.066
-    T_c_corr[1,3] = cam_xyz_offset[1]*1000 # y_mm = 29 / 1446 * 4 = 0.08
-    T_c_corr[2,3] = cam_xyz_offset[2]*1000
-    T_o_c = np.dot(T_o_c, T_c_corr)
-
-    ## F_cv_ambf
-    extrinsic = np.array([[0, 1, 0, 0], [0, 0, -1, 0],
-                          [-1, 0, 0, 0], [0, 0, 0, 1]])
-
     cam_cmd.enable_position_controller = 1
-
-    # Fix the phacon to AMBF origin
-    T_o_p = T_o_pb@T_pb_p
-    T_p_o = sol.invTransformation(T_o_p)
-    T_p_c = T_p_o@T_o_c@extrinsic
-    # # update the camera pose command
+ 
+    T_p_c = calculate_transformation(camhand_pose, pan_pose)
     drill_cmd, cam_cmd = move(np.eye(4), T_p_c, drill_cmd, cam_cmd)
 
-
-    # publish topics
-    # pub_drill.publish(drill_cmd)
+    # visualize 
+    spinner_char = spinner[rospy.Time.now().secs % len(spinner)]
+    print(f"Cam Moving... {spinner_char}", end="\r")
+    
     pub_camera.publish(cam_cmd)
-    print(T_p_c[:3, 3].T)
+    # print(T_p_c[:3, 3].T)
 
     if args.sim_sync:
         limage.header.stamp = rospy.Time.now()
@@ -195,15 +181,15 @@ def cam_offset_cb(msg):
 
 
 def main():
-    global pub_camera, cam_mtx, pub_eval_segm, pub_limage, pub_pose_pan, pub_pose_camhand, pub_pointcloud, T_cb_c, T_pb_p
+    global pub_camera, cam_mtx, pub_eval_segm, pub_limage, pub_pose_pan, pub_pose_camhand, pub_pointcloud, T_cb_c, T_pb_p, spinner
+    spinner = ['-', '\\', '|', '/']
 
-    cam_mtx = np.load('/home/shc/Twin-S/params/zed_M_l.npy')
-
-    # argv[1]: X dir path
-    T_cb_c = np.load(args.X_path)
+    f = open(args.config)
+    calib_config_path = json.load(f)
     
-    ## Registration result
-    T_p_pb = np.load('/home/shc/Twin-S/params/phacon2pan_0411.npy')
+    cam_mtx = np.load(calib_config_path['root_path']+calib_config_path['camera_matrix'])
+    T_cb_c = np.load(calib_config_path['root_path']+calib_config_path['T_cb_c'])
+    T_p_pb = np.load(calib_config_path['root_path']+calib_config_path['T_p_pb'])
     T_pb_p = sol.invTransformation(T_p_pb)
 
     # Initialize ROS node
@@ -236,8 +222,6 @@ def main():
         ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_pan_sub, limage_sub], 50, 0.5)
         ts.registerCallback(callback)
 
-    x_sub = rospy.Subscriber('/camera/xyz_offset', Float32MultiArray, cam_offset_cb, queue_size=1)
-
     rospy.spin()
 
     rospy.on_shutdown(my_shutdown_hook)
@@ -246,11 +230,11 @@ def main():
 if __name__ == '__main__':
 
     parser = ArgumentParser()
-    parser.add_argument("--handeye", dest="X_path", help="path of handeye transformation X", default='hand_eye_X.npy', type=str)
+    # parser.add_argument("--handeye", dest="X_path", help="path of handeye transformation X", default='hand_eye_X.npy', type=str)
     parser.add_argument("--eval_segm", dest='eval_segm', help='pulish images to evaluate the overlay of segmentation mask and the real scene.', action='store_true')
     parser.add_argument("--sim_sync", dest='sim_sync', help='sync the recorded images with the sim scene.', action='store_true')
     parser.add_argument("--pcd", dest='sync_pcd', help='sync the recorded pointcloud from camera.', action='store_true')
-
+    parser.add_argument("-c", "--config", required=False, type=str, help="Configuration file containing paths of all calibration parameters.")
     args = parser.parse_args()
     
     main()

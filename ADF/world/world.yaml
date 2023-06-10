@@ -15,8 +15,8 @@ conversion factor: 5.556
 light1:
   namespace: lights/
   name: light1
-  # location: {x: 4.0, y: 2.5, z: 2.0}
-  location: {x: -10, y: 1, z: 1}
+  location: {x: 4.0, y: 2.5, z: 2.0}
+  # location: {x: -10, y: 1, z: 1}
   direction: {x: 0.0, y: 0.0, z: 1.0}
   spot exponent: 0.3
   shadow quality: 5
@@ -69,7 +69,7 @@ main_camera:
     vertex: shader.vs
     fragment: shader.fs
 
-  projection matrix: [[1.50693194, 0., 0.04166667, 0.], [0., 2.67899012, -0.05353326,
+  projection matrix: [[1.50693194, 0., 0.03958333, 0.], [0., 2.67899012, -0.05353326,
       0.], [0., 0., -1.00040008, -0.00360043], [0., 0., -1., 0.]]
   plugins: [{name: camera_projection_override, path: ../../build/, filename: libcamera_projection_override.so}]
 

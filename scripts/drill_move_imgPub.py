@@ -9,23 +9,19 @@ from argparse import ArgumentParser
 import sys
 from sensor_msgs.msg import CompressedImage, Image, PointCloud2
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Pose
 from scipy.spatial.transform import Rotation as R
 from cv_bridge import CvBridge
 import cv2
 bridge = CvBridge()
-from ambf_client import Client
 import time
-from ambf_object import Object
+import json
 from ambf_msgs.msg import ObjectState, RigidBodyCmd, CameraCmd
 from std_msgs.msg import Float32MultiArray
 
+sys.path.append('/home/shc/Twin-S/util')
 
-sys.path.insert(0, '/home/shc/Twin-S/util')
 from Solver import solver
-from dataLoader import dataLoader
 sol = solver()
-ld = dataLoader()
 
 global cam_xyz_offset
 cam_xyz_offset = np.zeros([3,1])
@@ -166,81 +162,55 @@ def projectWithoutDistortion(intrinsic_matrix, width, height, pts):
     return pixs, valid_pixs, dists
 
 
-# def callback(camhand_pose, drill_pose, pan_pose, limage):
+def calculate_transformation(camhand_pose, drill_pose, pan_pose):
+    '''
+    Calculate the target transformation with the rosmsg poses.
+    '''
+    ## convert quaternion to 4x4 transformation matrix 
+    T_o_cb = quat2trans(sol.rosmsg2quat(camhand_pose))
+    T_o_db = quat2trans(sol.rosmsg2quat(drill_pose))
+    T_o_pb = quat2trans(sol.rosmsg2quat(pan_pose))
+    
+    ## by annotating F_A_B means transformation of B w.r.t A
+    # F_o_cam = F_o_camhand * X
+    T_o_c = np.dot(T_o_cb, X)
+
+    T_o_d = T_o_db@T_db_d
+
+    T_c_o = sol.invTransformation(T_o_c)
+    T_c_db =T_c_o@T_o_db
+    T_c_d = T_c_db@T_db_d
+
+    # F_cv_ambf
+    extrinsic = np.array([[0, 1, 0, 0], [0, 0, -1, 0],
+                          [-1, 0, 0, 0], [0, 0, 0, 1]])
+
+    # Fix the phacon to AMBF origin
+    T_o_p = T_o_pb@T_pb_p
+    T_p_o = sol.invTransformation(T_o_p)
+    
+    # Get the camera and drill poses w.r.t the phantom
+    T_p_c = T_p_o@T_o_c@extrinsic
+    T_p_d = T_p_o@T_o_d
+    return T_p_d, T_p_c, T_c_d
+
+
 def callback(*publishers):
-    '''
-    Args:
-    - camhand_pose : pose msg of camera hand in tracker coordinate
-    - drill_pose : pose msg of drill in tracker coordinate
-    '''
+
     global cam_xyz_offset
     global pub_drill, pub_camera, pub_limage, pub_eval_image, args
 
-    # [camhand_pose, drill_pose, pan_pose, limage] = publishers
-    # if args.eval_segm:
-    #     [camhand_pose, drill_pose, pan_pose, limage, segm] = publishers
-    # else:
-    #     [camhand_pose, drill_pose, pan_pose, limage, rimage] = publishers
-
-    [camhand_pose, drill_pose, pan_pose, limage, rimage] = publishers
+    if args.pose_only:
+       [camhand_pose, drill_pose, pan_pose] = publishers 
+    else:
+        [camhand_pose, drill_pose, pan_pose, limage, rimage] = publishers
 
     drill_cmd = RigidBodyCmd()
     cam_cmd = CameraCmd()
     drill_cmd.cartesian_cmd_type = 1
     cam_cmd.enable_position_controller = 1
 
-    ## convert quaternion to 4x4 transformation matrix 
-    T_o_cb = quat2trans(sol.rosmsg2quat(camhand_pose))
-    T_o_db = quat2trans(sol.rosmsg2quat(drill_pose))
-    T_o_pb = quat2trans(sol.rosmsg2quat(pan_pose))
-
-    ## by annotating A2B means transformation of B w.r.t A or F_A_B
-    ## F_o_cam = F_o_camhand * X
-    T_o_c = np.dot(T_o_cb, X)
-
-    T_c_o = sol.invTransformation(T_o_c) 
-
-    ## F_cam_drill = F_cam_o * F_o_drill
-    T_c_db =T_c_o@T_o_db
-
-    ## T_db_d
-    # R_db_d = np.eye(3)
-    
-
-    ## t_cam_tip = R_cam_drill * t_tip + t_cam_drill
-    # t_c_d = np.dot(T_c_db[:3, :3], t_tip) + T_c_db[:3, 3].reshape(3,-1)
-    T_c_d = T_c_db@T_db_d
-    # print("tip: ", T_c_d[:3, 3].reshape(-1,3))
-
-    ## F_cam_tip = [R_cam_drill * R_drill_tip, t_cam_tip]
-    T_o_d = T_o_db@T_db_d
-
-    ## F_o_tip = [R_o_drill, t_o_tip]  This is most likely wrong!! Need R_drill_tip
-    ## Update: F_o_tip = F_o_cam * F_cam_tip
-    # op2tip = T_o_c @ T_c_d
-
-    ## F_cv_ambf
-    extrinsic = np.array([[0, 1, 0, 0], [0, 0, -1, 0],
-                          [-1, 0, 0, 0], [0, 0, 0, 1]])
-
-    ## F_o_ambf = F_o_cam * F_cv_ambf                    
-    T_o_ambf = np.dot(T_o_c, extrinsic)
-    T_ambf_o = sol.invTransformation(T_o_ambf)
-
-    # Fix the phacon to AMBF origin
-    T_o_p = T_o_pb@T_pb_p
-    T_p_o = sol.invTransformation(T_o_p)
-
-    # adjust the offset
-    T_c_corr = np.identity(4)
-    T_c_corr[0,3] = cam_xyz_offset[0]*1000
-    T_c_corr[1,3] = cam_xyz_offset[1]*1000 
-    T_c_corr[2,3] = cam_xyz_offset[2]*1000
-    T_o_c = np.dot(T_o_c, T_c_corr)
-    
-    T_p_c = T_p_o@T_o_c
-    T_p_d = T_p_o@T_o_d
-    T_p_c = T_p_c@extrinsic
+    T_p_d, T_p_c, T_c_d = calculate_transformation(camhand_pose, drill_pose, pan_pose)
     drill_cmd, cam_cmd = move(T_p_d, T_p_c, drill_cmd, cam_cmd)
 
     # publish topics
@@ -274,50 +244,25 @@ def callback(*publishers):
         print(e-s)
         # Publish new image
         pub_eval_image.publish(msg)
-        
-    
-    # if args.eval_segm:
-    #     limage.header.stamp = rospy.Time.now()
-    #     segmimg_arr = np.fromstring(segm.data, np.uint8)
-    #     segm_image = cv2.imdecode(segmimg_arr, cv2.IMREAD_COLOR)
-
-    #     limg_arr = np.fromstring(limage.data, np.uint8)
-    #     limg_image = cv2.imdecode(limg_arr, cv2.IMREAD_COLOR)
-    #     l_image = cv2.resize(limg_image, (640, 360))
-    #     overlap = cv2.addWeighted(l_image, 0.5, segm_image, 0.5, 0)
-
-    #     #### Create eval CompressedImage topic ####
-    #     msg.data = np.array(cv2.imencode('.jpg', overlap)[1]).tostring()
-    #     # Publish new image
-    #     pub_eval_segm.publish(msg)
 
 def my_shutdown_hook():
     print("in my_shutdown_hook")
 
-def cam_offset_cb(msg):
-    global cam_xyz_offset
-    cam_xyz_offset[0] = msg.data[0]
-    cam_xyz_offset[1] = msg.data[1]
-    cam_xyz_offset[2] = msg.data[2]
 
 def main():
-    global pub_drill, pub_camera, pub_limage,pub_rimage, pub_eval_image, pub_pose_pan, pub_pose_drill, pub_pose_camhand, pub_eval_segm, cam_mtx, args, X, t_tip, R_db_d, T_pb_p, T_db_d, msg, spinner
+    global pub_drill, pub_camera, pub_limage,pub_rimage, pub_eval_image, pub_pose_pan, pub_pose_drill, pub_pose_camhand, cam_mtx, args, X, R_db_d, T_pb_p, T_db_d, msg, spinner
     spinner = ['-', '\\', '|', '/']
 
-    cam_mtx = np.load('/home/shc/Twin-S/params/zed_M_l.npy')
-    ## X: hand-eye transformation F_camhand_cam
-    # argv[1]: X dir path
-    X = np.load(args.X_path)
-
-    ## Drill tip in drill coordinate t_tip from pivot calibration
-    t_tip = np.load('/home/shc/Twin-S/params/drill_pivot_0505.npy')
+    # Load the calibration parameters
+    f = open(args.config)
+    calib_config_path = json.load(f)
     
-    ## Rotation of tip w.r.t drill marker got from rotation calibration
-    R_db_d =np.load('/home/shc/Twin-S/params/R_db_d_.npy')
-    T_db_d = np.vstack([np.hstack([R_db_d, t_tip]),np.array([0,0,0,1]).reshape(1,4)])
-
-    ## Registration result
-    T_p_pb = np.load('/home/shc/Twin-S/params/phacon2pan_0411.npy')
+    cam_mtx = np.load(calib_config_path['root_path']+calib_config_path['camera_matrix'])
+    X = np.load(calib_config_path['root_path']+calib_config_path['T_cb_c'])
+    t_db_d = np.load(calib_config_path['root_path']+calib_config_path['t_db_d'])
+    R_db_d =np.load(calib_config_path['root_path']+calib_config_path['R_db_d'])
+    T_db_d = np.vstack([np.hstack([R_db_d, t_db_d]),np.array([0,0,0,1]).reshape(1,4)])
+    T_p_pb = np.load(calib_config_path['root_path']+calib_config_path['T_p_pb'])
     T_pb_p = sol.invTransformation(T_p_pb)
 
     # Initialize ROS node
@@ -346,18 +291,15 @@ def main():
         pub_pose_camhand = rospy.Publisher('/pss_pose_camhand',PoseStamped, tcp_nodelay=True, queue_size=10)
     if args.eval_tip_rpj:
         pub_eval_image = rospy.Publisher('/eval_drill/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
-    # if args.eval_segm:
-    #     segm_sub = message_filters.Subscriber('/ambf/env/cameras/segmentation_camera/ImageData/compressed', CompressedImage) ##'/ambf/env/cameras/segmentation_camera/ImageData/compressed'
-    #     pub_eval_segm = rospy.Publisher('/eval_segm/compressed',CompressedImage, tcp_nodelay=True, queue_size=10)
-    #     ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, segm_sub], 50, 0.5)
-    #     ts.registerCallback(callback)
         ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, rimage_sub], 50, 0.5)
+        ts.registerCallback(callback)
+
+    elif args.pose_only:
+        ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub], 50, 0.5)
         ts.registerCallback(callback)
     else:
         ts = message_filters.ApproximateTimeSynchronizer([pose_camhand_sub, pose_drill_sub, pose_pan_sub, limage_sub, rimage_sub], 50, 0.5)
         ts.registerCallback(callback)
-
-    x_sub = rospy.Subscriber('/camera/xyz_offset', Float32MultiArray, cam_offset_cb, queue_size=1)
 
     rospy.spin()
     rospy.on_shutdown(my_shutdown_hook)
@@ -366,11 +308,12 @@ def main():
 if __name__ == '__main__':
 
     parser = ArgumentParser()
-    parser.add_argument("--handeye", dest="X_path", help="path of handeye transformation X", default='hand_eye_X.npy', type=str)
+    # parser.add_argument("--handeye", dest="X_path", help="path of handeye transformation X", default='hand_eye_X.npy', type=str)
     parser.add_argument("--eval_tip_rpj", dest='eval_tip_rpj', help='pulish images to evaluate the drill tip reprojection.', action='store_true')
     # parser.add_argument("--eval_segm", dest='eval_segm', help='pulish images to evaluate the overlay of segmentation mask and the real scene.', action='store_true')
     parser.add_argument("--sim_sync", dest='sim_sync', help='sync the recorded images with the sim scene.', action='store_true')
-
+    parser.add_argument("--pose_only", dest='pose_only', help='only subscribe poses.', action='store_true')
+    parser.add_argument("-c", "--config", required=False, type=str, help="Configuration file containing paths of all calibration parameters.")
     args = parser.parse_args()
     
     main()

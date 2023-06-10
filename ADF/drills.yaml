@@ -85,8 +85,8 @@ BODY 2mm:
   location:
     position:
       x: -5.0
-      y: 0.0
-      z: 0.0
+      y: -10.0
+      z: 10.0
     orientation:
       r: 0.0
       p: -0.0
