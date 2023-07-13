@@ -1,7 +1,7 @@
 *.~
 *.user
 ~.old
-build/
+# build/
 .idea/
 .vscode
 
@@ -12,7 +12,7 @@ build/
 *.ply
 
 
-*resources/volumes/
+# *resources/volumes/
 hdf5_files
 *.hdf5
 *.avi
